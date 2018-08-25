@@ -44,6 +44,18 @@ void HTTPServer::acceptToQueue()
 	request_queue_lock.unlock();
 }
 
+HTTPRequest* HTTPServer::popOffQueue()
+{
+	request_queue_lock.lock();
+
+	HTTPRequest* req = request_queue[0];
+	request_queue.erase(request_queue.begin());
+
+	request_queue_lock.unlock();
+
+	return req;
+}
+
 void HTTPServer::closeSocket()
 {
 	close(this->socket_fd);

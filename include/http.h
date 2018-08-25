@@ -31,6 +31,8 @@ public:
 	void acceptToQueue();
 	void closeSocket();
 
+	HTTPRequest* popOffQueue();
+
 	void setActive(bool active) { this->active = active; }
 	bool isActive() { return active; }
 private:
