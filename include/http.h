@@ -4,6 +4,8 @@
 #include <netinet/in.h>
 #include <vector>
 #include <mutex>
+#include <string>
+#include <map>
 
 #if CMAKE_SYSTEM_NAME == "Windows"
 	#include <windows.h>
@@ -18,6 +20,12 @@ public:
 private:
 	struct sockaddr address;
 	int fd;
+
+	std::string method;
+	std::string resource;
+	std::map<std::string, std::string> attributes;
+
+	friend class HTTPServer;
 };
 
 class HTTPServer
