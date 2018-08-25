@@ -2,6 +2,14 @@
 #pragma once
 
 #include <netinet/in.h>
+#include <vector>
+#include <mutex>
+
+#if CMAKE_SYSTEM_NAME == "Windows"
+	#include <windows.h>
+#elif CMAKE_SYSTEM_NAME == "Linux" || CMAKE_SYSTEM_NAME == "Darwin"
+	#include <pthread.h>
+#endif
 
 class HTTPRequest
 {
@@ -15,13 +23,26 @@ private:
 class HTTPServer
 {
 public:
-	HTTPServer(int domain, int type, int port, const char* addr);
+	HTTPServer(int domain, int port, const char* addr, int backlog);
 
-	bool bind();
-	int listen();
-	HTTPRequest* accept();
+	bool bindSocket();
+	int listenSocket();
+	HTTPRequest* acceptConnection();
+	void acceptToQueue();
+	void closeSocket();
+
+	void setActive(bool active) { this->active = active; }
+	bool isActive() { return active; }
 private:
+	bool active;
 	int socket_fd;
 	int backlog;
+
+	std::mutex request_queue_lock;
+	std::vector<HTTPRequest*> request_queue;
 };
+
+void ServerThread(void* server_ptr);
+
+HTTPServer* StartServerThread(int domain, int port, const char* addr, int backlog);
 
