@@ -24,13 +24,14 @@ public:
 	}
 
 	int get_fd() { return fd; }
+
+	std::string method;
+	std::string endpoint;
+	std::map<std::string, std::string> attributes;
+	std::map<std::string, std::string> header;
 private:
 	struct sockaddr_in address;
 	int fd;
-
-	std::string method;
-	std::string resource;
-	std::map<std::string, std::string> attributes;
 
 	friend class HTTPServer;
 };

@@ -106,6 +106,9 @@ HTTPRequest* HTTPServer::acceptConnection()
 	std::memcpy(method, curr, len);
 	// Move the pointer to after the space.
 	curr = delim + 1;
+	// Assign and delete the method.
+	req->method = method;
+	delete[] method;
 
 	// Find the next space.
 	delim = strchr(curr, ' ');
@@ -119,16 +122,43 @@ HTTPRequest* HTTPServer::acceptConnection()
 	std::memcpy(requestURI, curr, len);
 	// Move the pointer to after the space.
 	curr = delim + 1;
+	// Assign and delete the requestURI.
+	// TODO: Extract the attributes from the request.
+	req->endpoint = requestURI;
+	delete[] requestURI;
 
 	// We shall ignore the HTTP version for now, since we only really care about supporting HTTP/1.1
+	
+	char* line;
+	// As long as we have a valid line, and the line isn't just "\r\n\0", keep reading the header.
+	while((line = read_line(f)) && line[2] != '\0')
+	{
+		// Start at the current line.
+		curr = line;
+		// Find the :
+		delim = strchr(curr, ':');
+		// Get the length of the header name.
+		len = delim - curr;
+		// Create a buffer for the header name.
+		char* header_name = new char[len + 1];
+		// Copy the bytes to the new buffer.
+		std::memcpy(header_name, curr, len);
+		header_name[len] = '\0';
+		// Move the line up 2 past the colon (1 for the colon, 1 for the space).
+		curr = delim + 2;
+		// Find the first \r since that will mark the end.
+		delim = strchr(curr, '\r');
+		// Replace the \r with \0 to make a valid C string.
+		*delim = '\0';
+		// Assign headers.
+		req->header[std::string(header_name)] = std::string(curr);
+		// Delete both buffers.
+		delete[] header_name;
+		delete[] line;
+	}
+
 	// We will also leave the remaining data to be read from separately. That way incoming data can be
 	// parsed without needing to read in the entire file. Yay for good design!
-	
-	req->method = method;
-	req->resource = requestURI;
-
-	delete[] method;
-	delete[] requestURI;
 
 	return req;
 }
