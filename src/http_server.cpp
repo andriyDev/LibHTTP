@@ -76,6 +76,14 @@ char* read_line(FILE* f)
 	return line;
 }
 
+std::string get_next_token(std::string* str, char delimeter, int offset_after_delim = 1)
+{
+	int token_end = str->find(delimeter);
+	std::string s = str->substr(0, token_end);
+	str = str->substr(token_end + offset_after_delim);
+	return s;
+}
+
 HTTPRequest* HTTPServer::acceptConnection()
 {
 	// Define vars.
@@ -89,72 +97,46 @@ HTTPRequest* HTTPServer::acceptConnection()
 	// Convert the file descriptor into a FILE object
 	FILE* f = fdopen(fd, "rb");
 	// Read the line
-	char* request_line = read_line(f);
-
-	// Set the current index pointer.
-	char* curr = request_line;
-
-	// Find the first space.
-	char* delim = strchr(curr, ' ');
-	// Get the length of the method.
-	int len = delim - curr;
-	// Create a buffer for the method.
-	char* method = new char[len + 1];
-	// Add the null terminator.
-	method[len] = '\0';
-	// Copy the bytes to the new method buffer.
-	std::memcpy(method, curr, len);
-	// Move the pointer to after the space.
-	curr = delim + 1;
-	// Assign and delete the method.
-	req->method = method;
-	delete[] method;
-
-	// Find the next space.
-	delim = strchr(curr, ' ');
-	// Get the length of the Request-URI.
-	len = delim - curr;
-	// Create a buffer for the Request-URI.
-	char* requestURI = new char[len + 1];
-	// Add the null terminator.
-	requestURI[len] = '\0';
-	// Copy the bytes to the new requestURI buffer.
-	std::memcpy(requestURI, curr, len);
-	// Move the pointer to after the space.
-	curr = delim + 1;
-	// Assign and delete the requestURI.
-	// TODO: Extract the attributes from the request.
-	req->endpoint = requestURI;
-	delete[] requestURI;
-
+	char* request_line_c = read_line(f);
+	std::string request_line(request_line_c);
+	delete[] request_line_c;
+	
+	// Find and consume the method token.
+	req->method = get_next_token(&request_line, ' ');
+	// Find and consume the requestURI token.
+	std::string requestURI = get_next_token(&request_line, ' ');
+	req->endpoint = get_next_token(&requestURI, '?');
+	// Read all the attributes.
+	while(requestURI != "")
+	{
+		// Read the attribute name.
+		std::string attribute_name = get_next_token(&requestURI, '=');
+		// Read the attribute val.
+		std::string attribute_val = get_next_token(&requestURI, '&');
+		// Assign the attribute.
+		req->attributes[attribute_name] = attribute_val;
+	}
+	
 	// We shall ignore the HTTP version for now, since we only really care about supporting HTTP/1.1
 	
-	char* line;
+	char* line_c;
 	// As long as we have a valid line, and the line isn't just "\r\n\0", keep reading the header.
-	while((line = read_line(f)) && line[2] != '\0')
+	while((line_c = read_line(f)) && line_c[2] != '\0')
 	{
-		// Start at the current line.
-		curr = line;
-		// Find the :
-		delim = strchr(curr, ':');
-		// Get the length of the header name.
-		len = delim - curr;
-		// Create a buffer for the header name.
-		char* header_name = new char[len + 1];
-		// Copy the bytes to the new buffer.
-		std::memcpy(header_name, curr, len);
-		header_name[len] = '\0';
-		// Move the line up 2 past the colon (1 for the colon, 1 for the space).
-		curr = delim + 2;
-		// Find the first \r since that will mark the end.
-		delim = strchr(curr, '\r');
-		// Replace the \r with \0 to make a valid C string.
-		*delim = '\0';
-		// Assign headers.
-		req->header[std::string(header_name)] = std::string(curr);
-		// Delete both buffers.
-		delete[] header_name;
-		delete[] line;
+		// Create a c++ string from the C string.
+		std::string line = line_c;
+		delete[] line_c;
+		// Read the header name.
+		std::string header_name = get_next_token(&line, ':', 2);
+		// Read the header val.
+		std::string header_val = get_next_token(&line, '\r', 2);
+		// Assign the header.
+		req->header[header_name] = header_val;
+	}
+	// If line_c is valid, then it must have been the "\r\n\0" line, so we still have to clear it.
+	if(line_c)
+	{
+		delete[] line_c;
 	}
 
 	// We will also leave the remaining data to be read from separately. That way incoming data can be
