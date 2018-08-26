@@ -7,18 +7,25 @@
 #include <string>
 #include <map>
 
-#if CMAKE_SYSTEM_NAME == "Windows"
+#ifdef windows
 	#include <windows.h>
-#elif CMAKE_SYSTEM_NAME == "Linux" || CMAKE_SYSTEM_NAME == "Darwin"
+#endif
+#ifdef posix
 	#include <pthread.h>
 #endif
 
 class HTTPRequest
 {
 public:
-	HTTPRequest(struct sockaddr* address, int fd);
+	HTTPRequest(struct sockaddr_in address, int fd)
+	{
+		this->address = address;
+		this->fd = fd;
+	}
+
+	int get_fd() { return fd; }
 private:
-	struct sockaddr address;
+	struct sockaddr_in address;
 	int fd;
 
 	std::string method;
@@ -31,7 +38,7 @@ private:
 class HTTPServer
 {
 public:
-	HTTPServer(int domain, int port, const char* addr, int backlog);
+	HTTPServer(int domain, int port, int backlog);
 
 	bool bindSocket();
 	int listenSocket();
@@ -46,6 +53,8 @@ public:
 private:
 	bool active;
 	int socket_fd;
+	struct sockaddr_in address;
+
 	int backlog;
 
 	std::mutex request_queue_lock;
@@ -54,5 +63,5 @@ private:
 
 void ServerThread(void* server_ptr);
 
-HTTPServer* StartServerThread(int domain, int port, const char* addr, int backlog);
+HTTPServer* StartServerThread(int domain, int port, int backlog);
 

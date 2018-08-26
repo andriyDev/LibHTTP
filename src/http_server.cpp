@@ -1,14 +1,16 @@
 
-#include "http.h"
+#include "http_server.h"
 
 #include <unistd.h>
+#include <cstring>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 
-HTTPServer::HTTPServer(int domain, int port, const char* addr, int backlog)
+HTTPServer::HTTPServer(int domain, int port, int backlog)
 {
-	struct sockaddr_in address;
-	address.sin_family = domain;
-	address.sin_port = htons(port);
-	inet_aton(addr, &address.sin_addr.s_addr);
+	this->address.sin_family = domain;
+	this->address.sin_addr.s_addr = INADDR_ANY;
+	this->address.sin_port = htons(port);
 	
 	this->active = true;
 	this->socket_fd = socket(domain, SOCK_STREAM, 0);
@@ -17,7 +19,7 @@ HTTPServer::HTTPServer(int domain, int port, const char* addr, int backlog)
 
 bool HTTPServer::bindSocket()
 {
-	return bind(socket_fd, (struct sockaddr*)address, sizeof(address)) < 0;
+	return bind(socket_fd, (struct sockaddr*)&this->address, sizeof(this->address)) >= 0;
 }
 
 int HTTPServer::listenSocket()
@@ -80,7 +82,7 @@ HTTPRequest* HTTPServer::acceptConnection()
 	struct sockaddr_in request_address;
 	int addrlen;
 	// Accept the connection.
-	int fd = accept(socket_fd, (struct sockaddr*)request_address, (socklen_t*)&addrlen);
+	int fd = accept(socket_fd, (struct sockaddr*)&request_address, (socklen_t*)&addrlen);
 
 	// Create the request object.
 	HTTPRequest* req = new HTTPRequest(request_address, fd);
@@ -101,7 +103,7 @@ HTTPRequest* HTTPServer::acceptConnection()
 	// Add the null terminator.
 	method[len] = '\0';
 	// Copy the bytes to the new method buffer.
-	memcpy(method, curr, len);
+	std::memcpy(method, curr, len);
 	// Move the pointer to after the space.
 	curr = delim + 1;
 
@@ -114,7 +116,7 @@ HTTPRequest* HTTPServer::acceptConnection()
 	// Add the null terminator.
 	requestURI[len] = '\0';
 	// Copy the bytes to the new requestURI buffer.
-	memcpy(requestURI, curr, len);
+	std::memcpy(requestURI, curr, len);
 	// Move the pointer to after the space.
 	curr = delim + 1;
 
@@ -124,15 +126,19 @@ HTTPRequest* HTTPServer::acceptConnection()
 	
 	req->method = method;
 	req->resource = requestURI;
+
+	delete[] method;
+	delete[] requestURI;
+
 	return req;
 }
 
 void HTTPServer::acceptToQueue()
 {
-	HTTPRequest req = this->acceptConnection();
+	HTTPRequest* req = this->acceptConnection();
 	request_queue_lock.lock();
 	
-	request_queue.push(req);
+	request_queue.push_back(req);
 
 	request_queue_lock.unlock();
 }
@@ -170,10 +176,10 @@ void ServerThread(void* server_ptr)
 	server->closeSocket();
 }
 
-HTTPServer* StartServerThread(int domain, int port, const char* addr, int backlog)
+HTTPServer* StartServerThread(int domain, int port, int backlog)
 {
-	HTTPServer* server = new HTTPServer(domain, port, addr, backlog);
-#if CMAKE_SYSTEM_NAME == "Windows"
+	HTTPServer* server = new HTTPServer(domain, port, backlog);
+#ifdef windows
 	HANDLE thread;
 	thread = CreateThread(NULL, 0, ServerThread, server, 0, NULL);
 	if(!thread)
@@ -181,7 +187,8 @@ HTTPServer* StartServerThread(int domain, int port, const char* addr, int backlo
 		return nullptr;
 	}
 	return server;
-#elif CMAKE_SYSTEM_NAME == "Linux" || CMAKE_SYSTEM_NAME == "Darwin"
+#endif 
+#ifdef posix
 	pthread_t thread;
 	if(pthread_create(&thread, NULL, ServerThread, server))
 	{
